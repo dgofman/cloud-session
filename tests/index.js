@@ -28,7 +28,7 @@ describe('Testing Session', function () {
 		},
 		cookie: function() {
 		}
-	}, ipaddress;
+	};
 
 	it('Should test session with default options', function(done) {
 		session(app, 12345, null);
@@ -86,7 +86,7 @@ describe('Testing Session', function () {
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
-		}
+		};
 
 		session(app, 12345, opt);
 		done();
@@ -97,7 +97,7 @@ describe('Testing Session', function () {
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
-		}
+		};
 
 		session(app, 12345, opt);
 		done();
@@ -108,7 +108,7 @@ describe('Testing Session', function () {
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
-		}
+		};
 		session(app, 12345, opt);
 		done();
 	});
@@ -118,7 +118,7 @@ describe('Testing Session', function () {
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
-		}
+		};
 		session(app, 12345, opt);
 		done();
 	});
@@ -128,7 +128,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			_req.session = {};
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt);
 	});
 
@@ -139,7 +139,7 @@ describe('Testing Session', function () {
 			callback(_req, res, function() {
 				done();
 			});
-		}
+		};
 		session(app, 12345, opt);
 	});
 
@@ -148,7 +148,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			_req.headers.cookie = null;
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt);
 	});
 
@@ -157,7 +157,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			_req.headers.cookie = ' ';
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt);
 	});
 
@@ -173,7 +173,7 @@ describe('Testing Session', function () {
 		_req.headers.cookie += ';x-cloud-ipaddress=192.255.255.255';
 		app.use = function(callback) {
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt, proxy);
 	});
 
@@ -189,7 +189,7 @@ describe('Testing Session', function () {
 		_req.headers.cookie += ';x-cloud-ipaddress=192.255.255.255';
 		app.use = function(callback) {
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt, proxy);
 	});
 
@@ -199,7 +199,7 @@ describe('Testing Session', function () {
 		fs.unlink(opt['session-file'], function() {
 			app.use = function(callback) {
 				callback(_req, res, done);
-			}
+			};
 			session(app, 12345, opt);
 		});
 	});
@@ -208,7 +208,7 @@ describe('Testing Session', function () {
 		var _req = JSON.parse(JSON.stringify(req));
 		app.use = function(callback) {
 			callback(_req, res, done);
-		}
+		};
 		session(app, 12345, opt);
 	});
 
@@ -216,7 +216,7 @@ describe('Testing Session', function () {
 		var _req = JSON.parse(JSON.stringify(req));
 		app.use = function(callback) {
 			callback(_req, res, function() {});
-		}
+		};
 
 		var apis = session(app, 12345, opt);
 		apis.cleanAll();
@@ -235,7 +235,7 @@ describe('Testing Session', function () {
 				callback(_req, res, done);
 				apis.cleanAll();
 			}, 1);				
-		}
+		};
 		apis = session(app, 12345, opt);
 	});
 });
