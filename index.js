@@ -8,7 +8,7 @@ var crypto = require('crypto'),
 	ipaddress;
 
 var ACTION = {
-	SESSION: 'get_session',
+	COPY: 'copy_session',
 	TRANSFER: 'transfer_sesssion',
 	DESTROY: 'destroy_session'
 };
@@ -38,32 +38,30 @@ module.exports = function(app, portNumber, opt, proxy) {
 		sidRegExp = new RegExp(sessionName + '=(\\w+)'),
 		ipRegExp = new RegExp('x-cloud-ipaddress=([0-9|\.]+)');
 
-	apis.serialize = function(req, res, data) {
+	apis.serialize = opt.serialize || function(req, res, data) {
 		return JSON.stringify(data || '');
 	};
 
-	apis.deserialize = function(req, res, data) {
+	apis.deserialize = opt.deserialize || function(req, res, data) {
 		return JSON.parse(data || '{}');
 	};
 
-	apis.encrypt = function(val, secret) {
+	apis.encrypt = opt.encrypt || function(val, secret) {
 		return crypto.createHmac('sha256', secret).update(val).digest('base64');
 	};
 
-	apis.destroy = function(req, next) {
+	apis.destroy = opt.destroy || function(req, callback) {
 		var match = ipRegExp.exec(req.headers.cookie);
 		if (match && match.length > 1) {
 			proxy({
 				host: match[1],
 				port: portNumber,
 				secure: isHTTPS
-			}, req).request(function(err) {
-				next(err);
-			}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.DESTROY});
+			}, req).request(callback, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.DESTROY});
 		}
 	};
 
-	apis.cleanAll = function() {
+	apis.cleanAll = opt.cleanAll || function() {
 		var now = Date.now();
 		for (var sessionId in sessionStore) {
 			if (now - sessionStore[sessionId].time > (expTime * 1000)) {
@@ -85,7 +83,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 			if (match && match.length > 1) {
 				var sessionID = apis.encrypt(match[1], req.query.sessionKey);
 
-				if (req.query.action === ACTION.SESSION || req.query.action === ACTION.TRANSFER) {
+				if (req.query.action === ACTION.COPY || req.query.action === ACTION.TRANSFER) {
 					try {
 						if (sessionStore[sessionID]) {
 							data = apis.serialize(req, res, sessionStore[sessionID].data);
@@ -160,7 +158,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 				sessionStore[req.sessionID].data = session;
 				req.session = session;
 				next();
-			}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.SESSION});
+			}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
 		} else {
 			req.session = sessionStore[req.sessionID].data;
 			next();
