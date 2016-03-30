@@ -155,6 +155,8 @@ module.exports = function(app, portNumber, opt, proxy) {
 				secure: isHTTPS
 			}, req).request(function(err, result) {
 				var session = result || {};
+				/* istanbul ignore next */ 
+				sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
 				sessionStore[req.sessionID].data = session;
 				req.session = session;
 				next();
