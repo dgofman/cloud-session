@@ -75,6 +75,22 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 	};
 
+	apis.getCookie = function(req, host, next) {
+		debug('getCookie:host=' + host);
+		proxy({
+			host: host,
+			port: portNumber,
+			secure: isHTTPS
+		}, req).request(function(err, result) {
+			var session = result || {};
+			/* istanbul ignore next */ 
+			sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
+			sessionStore[req.sessionID].data = session;
+			req.session = session;
+			next();
+		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
+	},
+
 	app.post(peer2peer, function (req, res) {
 		var data = null;
 		debug('Host:' + req.headers.host + ', action: ' + req.query.action + ', isvalid: ' + (req.query.sessionKey === sessionKey));
@@ -101,22 +117,6 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 		res.send(data);
 	});
-
-	app.getCookie = function(req, host, next) {
-		debug('getCookie:host=' + host);
-		proxy({
-			host: host,
-			port: portNumber,
-			secure: isHTTPS
-		}, req).request(function(err, result) {
-			var session = result || {};
-			/* istanbul ignore next */ 
-			sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
-			sessionStore[req.sessionID].data = session;
-			req.session = session;
-			next();
-		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
-	},
 
 	app.use(function session(req, res, next) {
 		if (req.session) {
