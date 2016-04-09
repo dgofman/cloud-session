@@ -164,7 +164,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
 			res.cookie('x-cloud-ipaddress', ipaddress);
-			app.getCookie(req, match[1], next);
+			apis.getCookie(req, match[1], next);
 		} else {
 			req.session = sessionStore[req.sessionID].data;
 			next();
