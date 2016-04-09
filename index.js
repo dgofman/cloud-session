@@ -102,6 +102,22 @@ module.exports = function(app, portNumber, opt, proxy) {
 		res.send(data);
 	});
 
+	app.getCookie = function(req, host, next) {
+		debug('getCookie:host=' + host);
+		proxy({
+			host: host,
+			port: portNumber,
+			secure: isHTTPS
+		}, req).request(function(err, result) {
+			var session = result || {};
+			/* istanbul ignore next */ 
+			sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
+			sessionStore[req.sessionID].data = session;
+			req.session = session;
+			next();
+		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
+	},
+
 	app.use(function session(req, res, next) {
 		if (req.session) {
 			return next();
@@ -148,19 +164,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
 			res.cookie('x-cloud-ipaddress', ipaddress);
-
-			proxy({
-				host: match[1],
-				port: portNumber,
-				secure: isHTTPS
-			}, req).request(function(err, result) {
-				var session = result || {};
-				/* istanbul ignore next */ 
-				sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
-				sessionStore[req.sessionID].data = session;
-				req.session = session;
-				next();
-			}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
+			app.getCookie(req, match[1], next);
 		} else {
 			req.session = sessionStore[req.sessionID].data;
 			next();
