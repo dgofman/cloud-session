@@ -10,7 +10,8 @@ var crypto = require('crypto'),
 var ACTION = {
 	COPY: 'copy_session',
 	TRANSFER: 'transfer_sesssion',
-	DESTROY: 'destroy_session'
+	DESTROY: 'destroy_session',
+	UPDATE: 'update_session'
 };
 
 dns.lookup(require('os').hostname(), function (err, ip) {
@@ -75,26 +76,57 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 	};
 
-	apis.getCookie = function(req, host, next) {
-		debug('getCookie:host=' + host);
+	apis.getSession = function(req, host, sessionID, next) {
+		debug('getSession:host=' + host + ', sessionID=' + sessionID);
 		proxy({
 			host: host,
 			port: portNumber,
 			secure: isHTTPS
 		}, req).request(function(err, result) {
 			var session = result || {};
-			/* istanbul ignore next */ 
-			sessionStore[req.sessionID] = sessionStore[req.sessionID] || {};
-			sessionStore[req.sessionID].data = session;
+			sessionStore[sessionID] = sessionStore[sessionID] || {};
+			sessionStore[sessionID].data = session;
 			req.session = session;
-			next();
+			next(err, session);
 		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
+	},
+
+	apis.updateSession = function(req, host, sessionID, path, value, next) {
+		debug('updateSession:host=' + host + ', sessionID=' + sessionID + ', path=' + path + ', value=' + value);
+		proxy({
+			host: host,
+			port: portNumber,
+			secure: isHTTPS
+		}, req).request(function(err, result) {
+			next(err, result);
+		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.UPDATE, sessionID: sessionID, path: path, value: value});
 	},
 
 	app.post(peer2peer, function (req, res) {
 		var data = null;
 		debug('Host:' + req.headers.host + ', action: ' + req.query.action + ', isvalid: ' + (req.query.sessionKey === sessionKey));
-		if (req.headers && req.headers.cookie && req.query.sessionKey === sessionKey) {
+		if (req.query.action === ACTION.UPDATE) {
+			try {
+				data = sessionStore[req.query.sessionID].data;
+				var node = data, 
+					arr = req.query.path.split('/');
+				for (var i = 1; i < arr.length; i++) {
+					var key = arr[i];
+
+					if (i === arr.length - 1) {
+						node[key] = req.query.value;
+					} else {
+						if (node[key] === undefined) {
+							node[key] = {};
+						}
+						node = node[key];
+					}
+				}
+			} catch(e) {
+				/* istanbul ignore next */ 
+				debug(e.stack);
+			}
+		} else if (req.headers && req.headers.cookie && req.query.sessionKey === sessionKey) {
 			var match = sidRegExp.exec(req.headers.cookie);
 			if (match && match.length > 1) {
 				var sessionID = apis.encrypt(match[1], req.query.sessionKey);
@@ -106,7 +138,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 						}
 					} catch(e) {
 						/* istanbul ignore next */ 
-						console.error(e.stack);
+						debug(e.stack);
 					}
 				}
 
@@ -164,7 +196,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
 			res.cookie('x-cloud-ipaddress', ipaddress);
-			apis.getCookie(req, match[1], next);
+			apis.getSession(req, match[1], req.sessionID, next);
 		} else {
 			req.session = sessionStore[req.sessionID].data;
 			next();

@@ -6,42 +6,55 @@ var session = require('../index'),
 
 describe('Testing Session', function () {
 
-	var opt = {
-		'isHTTPS': false,
-		'session-env': true, 
-		'session-key': 'mySecretKey',
-		'session-name': 'my.sid',
-		'peer2peer': '/cloud/session',
-		'session-file': './session',
-		'exp-time': 3600,
-		'exp-interval': -1
-	}, app = {
-		use: function() {
-		},
-		post: function() {
-		}
-	}, req = {
-		headers: {},
-		query: { action: 'TEST', sessionKey: opt['session-key'] }
-	}, res = {
-		send: function() {
-		},
-		cookie: function() {
-		}
+	var portNumber = 12345,
+		opt, app, req, res;
+
+	var initialize = function() {
+		opt = {
+			'isHTTPS': false,
+			'session-env': true, 
+			'session-key': 'mySecretKey',
+			'session-name': 'my.sid',
+			'peer2peer': '/cloud/session',
+			'session-file': './session',
+			'exp-time': 3600,
+			'exp-interval': -1
+		};
+		app = {
+			use: function() {
+			},
+			post: function(path, callback) {
+				callback(req, res);
+			}
+		};
+		res = {
+			send: function() {
+			},
+			cookie: function() {
+			}
+		};
+		req = {
+			headers: {},
+			sessionID: '54321',
+			query: { action: 'TEST', sessionKey: opt['session-key'] }
+		};
 	};
 
 	it('Should test session with default options', function(done) {
-		session(app, 12345, null);
+		initialize();
+		session(app, portNumber, null);
 		done();
 	});
 
 	it('Should test session with user options', function(done) {
-		session(app, 12345, opt);
+		initialize();
+		session(app, portNumber, opt);
 		done();
 	});
 
 	it('Should test serialize JSON data', function(done) {
-		var apis = session(app, 12345, opt),
+		initialize();
+		var apis = session(app, portNumber, opt),
 			data = apis.serialize();
 		assert.equal(data, '""');
 		data = apis.serialize(null, null, {'key':'value'});
@@ -50,7 +63,8 @@ describe('Testing Session', function () {
 	});
 
 	it('Should test deserialize JSON data', function(done) {
-		var apis = session(app, 12345, opt),
+		initialize();
+		var apis = session(app, portNumber, opt),
 			data = apis.deserialize();
 		assert.ok(typeof data === 'object');
 		data = apis.deserialize(null, null, '{"key":"value"}');
@@ -59,13 +73,15 @@ describe('Testing Session', function () {
 	});
 
 	it('Should test encrypt token', function(done) {
-		var apis = session(app, 12345, opt),
+		initialize();
+		var apis = session(app, portNumber, opt),
 			data = apis.encrypt ('df3c50b1c2eda61617457e5646e36f25', opt['session-key']);
 		assert.equal(data, 'SzWSzd5DZiA9yrkMBhqgyPZU4CRaqC03xQp6mu1hXrg=');
 		done();
 	});
 
 	it('Should test destroy current session', function(done) {
+		initialize();
 		var proxy = function() {
 			return {
 				request: function(callback) {
@@ -73,7 +89,7 @@ describe('Testing Session', function () {
 				}
 			};
 		},
-		apis = session(app, 12345, opt, proxy);
+		apis = session(app, portNumber, opt, proxy);
 
 		apis.destroy({ headers: {cookie: ''} });
 		apis.destroy({ headers: {cookie: 'x-cloud-ipaddress=192.168.1.1'} }, function(err) {
@@ -83,33 +99,36 @@ describe('Testing Session', function () {
 	});
 
 	it('Should test post request without cookie', function(done) {
+		initialize();
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
 		};
 
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 		done();
 	});
 
 	it('Should test post request with invalid cookie', function(done) {
+		initialize();
 		req.headers.cookie = ' ';
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
 		};
 
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 		done();
 	});
 
 	it('Should test post request with session id', function(done) {
-		req.headers.cookie = opt['session-name'] + '=1234567890';
+		initialize();
+		req.headers.cookie = opt['session-name'] + '=portNumber67890';
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 		done();
 	});
 
@@ -119,7 +138,7 @@ describe('Testing Session', function () {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 		done();
 	});
 
@@ -129,36 +148,37 @@ describe('Testing Session', function () {
 			_req.session = {};
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 	});
 
 	it('Should test app middleware with assigned sessionID', function(done) {
 		var _req = JSON.parse(JSON.stringify(req));
 		app.use = function(callback) {
-			_req.sessionID = '54321';
 			callback(_req, res, function() {
 				done();
 			});
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 	});
 
 	it('Should test app middleware without cookie', function(done) {
 		var _req = JSON.parse(JSON.stringify(req));
+		_req.sessionID = null;
 		app.use = function(callback) {
 			_req.headers.cookie = null;
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 	});
 
 	it('Should test app middleware with invalid cookie', function(done) {
 		var _req = JSON.parse(JSON.stringify(req));
+		_req.sessionID = null;
 		app.use = function(callback) {
 			_req.headers.cookie = ' ';
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
 	});
 
 	it('Should test app middleware x-cloud-ipaddress', function(done) {
@@ -174,7 +194,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt, proxy);
+		session(app, portNumber, opt, proxy);
 	});
 
 	it('Should test app middleware x-cloud-ipaddress invalid session', function(done) {
@@ -182,34 +202,55 @@ describe('Testing Session', function () {
 			proxy = function() {
 				return {
 					request: function(callback) {
-						callback({status:'ERROR'});
+						callback();
 					}
 				};
 			};
 		_req.headers.cookie += ';x-cloud-ipaddress=192.255.255.255';
+		_req.sessionID = null;
 		app.use = function(callback) {
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt, proxy);
+		session(app, portNumber, opt, proxy);
 	});
 
 	it('Should test app middleware save session to file', function(done) {
 		process.env.NODE_ENV = 'development';
 		var _req = JSON.parse(JSON.stringify(req));
+		_req.sessionID = null;
 		fs.unlink(opt['session-file'], function() {
 			app.use = function(callback) {
 				callback(_req, res, done);
 			};
-			session(app, 12345, opt);
+			session(app, portNumber, opt);
 		});
 	});
 
 	it('Should test app middleware read session from file', function(done) {
 		var _req = JSON.parse(JSON.stringify(req));
+		_req.sessionID = null;
 		app.use = function(callback) {
 			callback(_req, res, done);
 		};
-		session(app, 12345, opt);
+		session(app, portNumber, opt);
+	});
+
+	it('Should test get remote session with new sessionId', function(done) {
+		var _req = JSON.parse(JSON.stringify(req)),
+			proxy = function() {
+				return {
+					request: function(callback) {
+						callback();
+					}
+				};
+			};
+		app.use = function(callback) {
+			callback(_req, res, function() {});
+		};
+		var apis = session(app, portNumber, opt, proxy);
+		apis.getSession(_req, '192.255.255.255', 'NEW_SESSION_ID', function() {
+			done();
+		});
 	});
 
 	it('Should test app middleware cleanAll function', function(done) {
@@ -218,24 +259,73 @@ describe('Testing Session', function () {
 			callback(_req, res, function() {});
 		};
 
-		var apis = session(app, 12345, opt);
+		var apis = session(app, portNumber, opt);
 		apis.cleanAll();
 		done();
 	});
 
+	it('Should test post update_session action', function(done) {
+		initialize();
+		req.query.action = 'update_session';
+		req.query.sessionID = req.sessionID;
+		req.query.path = '/data/node1/node2/node3';
+		req.query.value = 'Hello World';
+
+		app.post = function(path, callback) {
+			assert.equal(path, opt.peer2peer);
+			callback(req, res);
+		};
+		res.send = function(session) {
+			assert.equal(session.data.node1.node2.node3, req.query.value);
+		};
+		session(app, portNumber, opt);
+		done();
+	});
+
+	it('Should test post update_session action with invalid sessionID', function(done) {
+		initialize();
+		req.query.action = 'update_session';
+		req.query.sessionID = 666;
+
+		app.post = function(path, callback) {
+			assert.equal(path, opt.peer2peer);
+			callback(req, res);
+		};
+		res.send = function(data) {
+			assert.equal(data, null);
+		};
+		session(app, portNumber, opt);
+		done();
+	});
+
+	it('Should test update remote session', function(done) {
+		initialize();
+		var proxy = function() {
+			return {
+				request: function(callback) {
+					callback();
+				}
+			};
+		};
+		var apis = session(app, portNumber, opt, proxy);
+		apis.updateSession(req, '192.255.255.255', req.sessionID, '/key1/key2', 'VALUE', function() {
+			done();
+		});
+	});
+
 	it('Should test app middleware expire session', function(done) {
-		var _req = JSON.parse(JSON.stringify(req)),
-			apis = null;
+		initialize();
+		var apis = null;
 		app.use = function(callback) {
 			setTimeout(function() {
 				apis.serialize = function(req, res, session) {
 					session.time -= opt['exp-time'] * 1000;
 					return JSON.stringify(session);
 				},
-				callback(_req, res, done);
+				callback(req, res, done);
 				apis.cleanAll();
 			}, 1);				
 		};
-		apis = session(app, 12345, opt);
+		apis = session(app, portNumber, opt);
 	});
 });
