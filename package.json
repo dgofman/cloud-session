@@ -22,13 +22,12 @@
   },
   "dependencies": {
     "debug": "~2.2.0",
-    "proxy-orchestrator": "~0.0.7"
+    "proxy-orchestrator": "~0.0.12"
   },
   "devDependencies": {
-    "assert": "~1.3.0",
     "mocha": "~2.4.5",
-    "istanbul": "~0.4.0",
-    "jshint": "~2.9.1"
+    "istanbul": "~0.4.3",
+    "jshint": "~2.9.2"
   },
   "license": "MIT",
   "bugs": {
