@@ -39,20 +39,27 @@ module.exports = function(app, portNumber, opt, proxy) {
 		sidRegExp = new RegExp(sessionName + '=(\\w+)'),
 		ipRegExp = new RegExp('x-cloud-ipaddress=([0-9|\.]+)');
 
+	opt.intercept = opt.intercept || function() {
+	};
+
 	apis.serialize = opt.serialize || function(req, res, data) {
+		opt.intercept('SERIALIZE', data);
 		return JSON.stringify(data || '');
 	};
 
 	apis.deserialize = opt.deserialize || function(req, res, data) {
+		opt.intercept('DESERIALIZE', data);
 		return JSON.parse(data || '{}');
 	};
 
 	apis.encrypt = opt.encrypt || function(val, secret) {
+		opt.intercept('ENCRYPT', val, secret);
 		return crypto.createHmac('sha256', secret).update(val).digest('base64');
 	};
 
 	apis.destroy = opt.destroy || function(req, callback) {
 		var match = ipRegExp.exec(req.headers.cookie);
+		opt.intercept('DESTROY', match, req.headers);
 		if (match && match.length > 1) {
 			proxy({
 				host: match[1],
@@ -66,6 +73,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 		var now = Date.now();
 		for (var sessionId in sessionStore) {
 			if (now - sessionStore[sessionId].time > (expTime * 1000)) {
+				opt.intercept('DESTROY_SESSION', sessionId, sessionStore[sessionId]);
 				debug('Destroy sessionId: ' + sessionId);
 				/* istanbul ignore next */ 
 				if (sessionId === lastSessionId) {
@@ -77,6 +85,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 	};
 
 	apis.getSession = function(req, host, sessionID, next) {
+		opt.intercept('GET_SESSION', sessionID, host);
 		debug('getSession:host=' + host + ', sessionID=' + sessionID);
 		proxy({
 			host: host,
@@ -92,6 +101,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 	},
 
 	apis.updateSession = function(req, host, sessionID, path, value, next) {
+		opt.intercept('UPDATE_SESSION', sessionID, host, path, value);
 		debug('updateSession:host=' + host + ', sessionID=' + sessionID + ', path=' + path + ', value=' + value);
 		proxy({
 			host: host,
@@ -204,6 +214,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 	});
 
 	//clean session storage on local machine 
+	opt.intercept('START_INTERVAL', expInterval);
 	if (expInterval !== -1) {
 		setInterval(apis.cleanAll, expInterval * 1000);
 	}

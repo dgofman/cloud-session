@@ -319,7 +319,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			setTimeout(function() {
 				apis.serialize = function(req, res, session) {
-					session.time -= opt['exp-time'] * 1000;
+					session.time -= opt['exp-time'] * 10000;
 					return JSON.stringify(session);
 				},
 				callback(req, res, done);
