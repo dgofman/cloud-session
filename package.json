@@ -1,6 +1,6 @@
 {
   "name": "cloud-session",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Session replication library",
   "main": "index.js",
   "scripts": {
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "debug": "~2.2.0",
-    "proxy-orchestrator": "~0.0.12"
+    "proxy-orchestrator": "latest"
   },
   "devDependencies": {
     "mocha": "~2.4.5",

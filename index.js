@@ -69,6 +69,10 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 	};
 
+	apis.createCookie = opt.createCookie || function(res, key, value) {
+		res.cookie(key, value);
+	},
+
 	apis.cleanAll = opt.cleanAll || function() {
 		var now = Date.now();
 		for (var sessionId in sessionStore) {
@@ -184,7 +188,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		if (!req.sessionID) {
 			var uid = crypto.randomBytes(32).toString('hex').slice(0, 32);
-			res.cookie(sessionName, uid);
+			apis.createCookie(res, sessionName, uid);
 			req.sessionID = apis.encrypt(uid, sessionKey);
 		}
 
@@ -201,11 +205,11 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 
 		if (req.headers.cookie && req.headers.cookie.indexOf('x-cloud-ipaddress') === -1) {
-			res.cookie('x-cloud-ipaddress', ipaddress);
+			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
 		}
 
 		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
-			res.cookie('x-cloud-ipaddress', ipaddress);
+			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
 			apis.getSession(req, match[1], req.sessionID, next);
 		} else {
 			req.session = sessionStore[req.sessionID].data;
