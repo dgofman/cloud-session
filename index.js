@@ -35,6 +35,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 		expInterval = opt['exp-interval'] || 60 * 10, //check exired sessions every 10 minutes
 		peer2peer = opt['peer2peer'] || '/cloud-session',
 		lastSessionFile = opt['session-file'] || './session',
+		excludeBase = (typeof opt['exclude-base'] === 'string' ? [opt['exclude-base']] : opt['exclude-base'] || []),
 		lastSessionId = null,
 		sidRegExp = new RegExp(sessionName + '=(\\w+)'),
 		ipRegExp = new RegExp('x-cloud-ipaddress=([0-9|\.]+)');
@@ -168,6 +169,14 @@ module.exports = function(app, portNumber, opt, proxy) {
 		if (req.session) {
 			return next();
 		}
+
+		for (var i in excludeBase) {
+			if (req.path.indexOf(excludeBase[i]) === 0) {
+				return next();
+			}
+		}
+
+		debug(req.path);
 
 		if (!req.sessionID) {
 			if (req.headers && req.headers.cookie) {

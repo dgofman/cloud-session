@@ -328,4 +328,30 @@ describe('Testing Session', function () {
 		};
 		apis = session(app, portNumber, opt);
 	});
+
+	it('Should test exclude static context', function(done) {
+		initialize();
+		opt['exclude-base'] = '/static';
+		var _req = JSON.parse(JSON.stringify(req));
+		_req.path = '/static/foo.png';
+		app.use = function(callback) {
+			callback(_req, res, function() {
+				done();
+			});
+		};
+		session(app, portNumber, opt);
+	});
+
+	it('Should test exclude non-static context', function(done) {
+		initialize();
+		opt['exclude-base'] = '/static';
+		var _req = JSON.parse(JSON.stringify(req));
+		_req.path = '/test';
+		app.use = function(callback) {
+			callback(_req, res, function() {
+				done();
+			});
+		};
+		session(app, portNumber, opt);
+	});
 });
