@@ -117,6 +117,11 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.UPDATE, sessionID: sessionID, path: path, value: value});
 	},
 
+	apis.next = function(err, req, res, next) {
+		opt.intercept('NEXT', err);
+		next(err);
+	},
+
 	app.post(peer2peer, function (req, res) {
 		var data = null;
 		debug('Host:' + req.headers.host + ', action: ' + req.query.action + ', isvalid: ' + (req.query.sessionKey === sessionKey));
@@ -167,12 +172,12 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 	app.use(function session(req, res, next) {
 		if (req.session) {
-			return next();
+			return apis.next(null, req, res, next);
 		}
 
 		for (var i in excludeBase) {
 			if (req.path.indexOf(excludeBase[i]) === 0) {
-				return next();
+				return apis.next(null, req, res, next);
 			}
 		}
 
@@ -219,10 +224,12 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
 			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
-			apis.getSession(req, match[1], req.sessionID, next);
+			apis.getSession(req, match[1], req.sessionID, function(err) {
+				apis.next(err, req, res, next);
+			});
 		} else {
 			req.session = sessionStore[req.sessionID].data;
-			next();
+			apis.next(null, req, res, next);
 		}
 	});
 
