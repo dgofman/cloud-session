@@ -1,6 +1,6 @@
 {
   "name": "cloud-session",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Session replication library",
   "main": "index.js",
   "scripts": {

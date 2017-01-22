@@ -58,8 +58,12 @@ module.exports = function(app, portNumber, opt, proxy) {
 		return crypto.createHmac('sha256', secret).update(val).digest('base64');
 	};
 
+	apis.getToken = opt.getToken || function(req) {
+		return req.headers && req.headers.cookie;
+	};
+
 	apis.destroy = opt.destroy || function(req, callback) {
-		var match = ipRegExp.exec(req.headers.cookie);
+		var match = ipRegExp.exec(apis.getToken(req));
 		opt.intercept('DESTROY', match, req.headers);
 		if (match && match.length > 1) {
 			proxy({
@@ -123,7 +127,8 @@ module.exports = function(app, portNumber, opt, proxy) {
 	},
 
 	app.post(peer2peer, function (req, res) {
-		var data = null;
+		var data = null,
+			token = apis.getToken(req);
 		debug('Host:' + req.headers.host + ', action: ' + req.query.action + ', isvalid: ' + (req.query.sessionKey === sessionKey));
 		if (req.query.action === ACTION.UPDATE) {
 			try {
@@ -146,8 +151,8 @@ module.exports = function(app, portNumber, opt, proxy) {
 				/* istanbul ignore next */ 
 				debug(e.stack);
 			}
-		} else if (req.headers && req.headers.cookie && req.query.sessionKey === sessionKey) {
-			var match = sidRegExp.exec(req.headers.cookie);
+		} else if (token && req.query.sessionKey === sessionKey) {
+			var match = sidRegExp.exec(token);
 			if (match && match.length > 1) {
 				var sessionID = apis.encrypt(match[1], req.query.sessionKey);
 
@@ -183,9 +188,11 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		debug(req.path);
 
+		var token = apis.getToken(req);
+
 		if (!req.sessionID) {
-			if (req.headers && req.headers.cookie) {
-				var match = sidRegExp.exec(req.headers.cookie);
+			if (token) {
+				var match = sidRegExp.exec(token);
 				if (match && match.length > 1) {
 					try {
 						req.sessionID = apis.encrypt(match[1], sessionKey);
@@ -218,11 +225,11 @@ module.exports = function(app, portNumber, opt, proxy) {
 			fs.writeFileSync(lastSessionFile, apis.serialize(req, res, sessionStore[req.sessionID]));
 		}
 
-		if (req.headers.cookie && req.headers.cookie.indexOf('x-cloud-ipaddress') === -1) {
+		if (token && token.indexOf('x-cloud-ipaddress') === -1) {
 			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
 		}
 
-		if ((match = ipRegExp.exec(req.headers.cookie)) && match.length > 1 && match[1] !== ipaddress) {
+		if ((match = ipRegExp.exec(token)) && match.length > 1 && match[1] !== ipaddress) {
 			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
 			apis.getSession(req, match[1], req.sessionID, function(err) {
 				apis.next(err, req, res, next);
