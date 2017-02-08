@@ -21,13 +21,13 @@
     "url": "https://github.com/dgofman/cloud-session.git"
   },
   "dependencies": {
-    "debug": "~2.2.0",
+    "debug": "~2.6.0",
     "proxy-orchestrator": "latest"
   },
   "devDependencies": {
-    "mocha": "~3.0.2",
+    "mocha": "~3.2.0",
     "istanbul": "~0.4.5",
-    "jshint": "~2.9.3"
+    "jshint": "~2.9.4"
   },
   "license": "MIT",
   "bugs": {
