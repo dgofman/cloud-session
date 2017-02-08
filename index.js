@@ -29,7 +29,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 	var apis = {},
 		isHTTPS = !!opt.isHTTPS,
 		isEnvSession = !!opt['session-env'] && ((process.env.NODE_ENV || '').trim() === 'development'),
-		sessionKey = opt['session-key'] || 'cl0udS3sS10nK3y',
+		encryptKey = opt['encrypt-key'] || 'cl0udS3sS10nK3y',
 		sessionName =  opt['session-name'] || 'x-cloud-session',
 		expTime = opt['exp-time'] || 3600, //session expiration time in seconds
 		expInterval = opt['exp-interval'] || 60 * 10, //check exired sessions every 10 minutes
@@ -37,19 +37,38 @@ module.exports = function(app, portNumber, opt, proxy) {
 		lastSessionFile = opt['session-file'] || './session',
 		excludeBase = (typeof opt['exclude-base'] === 'string' ? [opt['exclude-base']] : opt['exclude-base'] || []),
 		lastSessionId = null,
-		sidRegExp = new RegExp(sessionName + '=(\\w+)'),
-		ipRegExp = new RegExp('x-cloud-ipaddress=([0-9|\.]+)');
+		sidRegExp = new RegExp(sessionName + '=([^;]+)');
+
+	var request = function(req, data, query, next, host) {
+		var token = apis.getToken(req);
+		if (token) {
+			var ip_id = token.split('|');
+			if (!data.uid) {
+				data.uid = ip_id[1];
+			}
+			debug('Request:host=' + ip_id[0] + ', uid=' + data.uid);
+			proxy({
+				host: host || ip_id[0],
+				port: portNumber,
+				secure: isHTTPS
+			}, req).request(function(err, result) {
+				next(err, result);
+			}, 'POST', peer2peer, data, query);
+		} else {
+			next({error: 'Invalid Token'});
+		}
+	};
 
 	opt.intercept = opt.intercept || function() {
 	};
 
 	apis.serialize = opt.serialize || function(req, res, data) {
-		opt.intercept('SERIALIZE', data);
+		opt.intercept('SERIALIZE', req, data);
 		return JSON.stringify(data || '');
 	};
 
 	apis.deserialize = opt.deserialize || function(req, res, data) {
-		opt.intercept('DESERIALIZE', data);
+		opt.intercept('DESERIALIZE', req, data);
 		return JSON.parse(data || '{}');
 	};
 
@@ -59,19 +78,17 @@ module.exports = function(app, portNumber, opt, proxy) {
 	};
 
 	apis.getToken = opt.getToken || function(req) {
-		return req.headers && req.headers.cookie;
-	};
-
-	apis.destroy = opt.destroy || function(req, callback) {
-		var match = ipRegExp.exec(apis.getToken(req));
-		opt.intercept('DESTROY', match, req.headers);
-		if (match && match.length > 1) {
-			proxy({
-				host: match[1],
-				port: portNumber,
-				secure: isHTTPS
-			}, req).request(callback, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.DESTROY});
+		var token = null;
+		if (req && req.headers) {
+			token = req.headers[sessionName];
+			if (!token) {
+				var match = sidRegExp.exec(req.headers.cookie);
+				if (match && match.length > 1) {
+					return match[1];
+				}
+			}
 		}
+		return token;
 	};
 
 	apis.createCookie = opt.createCookie || function(res, key, value) {
@@ -93,32 +110,26 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 	};
 
-	apis.getSession = function(req, host, sessionID, next) {
-		opt.intercept('GET_SESSION', sessionID, host);
-		debug('getSession:host=' + host + ', sessionID=' + sessionID);
-		proxy({
-			host: host,
-			port: portNumber,
-			secure: isHTTPS
-		}, req).request(function(err, result) {
+	apis.destroy = opt.destroy || function(req, next) {
+		opt.intercept('DESTROY', req);
+		request(req, {}, {action: ACTION.DESTROY}, next);
+	};
+
+	apis.getSession = function(req, sessionID, next) {
+		opt.intercept('GET_SESSION', req, sessionID);
+		request(req, {}, {action: ACTION[opt.action] || ACTION.TRANSFER}, function(err, result) {
 			var session = result || {};
 			sessionStore[sessionID] = sessionStore[sessionID] || {};
 			sessionStore[sessionID].data = session;
 			req.session = session;
 			next(err, session);
-		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION[opt.action] || ACTION.TRANSFER});
+		});
 	},
 
-	apis.updateSession = function(req, host, sessionID, path, value, next) {
-		opt.intercept('UPDATE_SESSION', sessionID, host, path, value);
-		debug('updateSession:host=' + host + ', sessionID=' + sessionID + ', path=' + path + ', value=' + value);
-		proxy({
-			host: host,
-			port: portNumber,
-			secure: isHTTPS
-		}, req).request(function(err, result) {
-			next(err, result);
-		}, 'POST', peer2peer, {}, {sessionKey: sessionKey, action: ACTION.UPDATE, sessionID: sessionID, path: path, value: value});
+	apis.updateSession = function(req, host, data, next) {
+		opt.intercept('UPDATE_SESSION', req, host, data);
+		debug('updateSession:host:' + host + ', data: ' + JSON.stringify(data));
+		request(req, data, {action: ACTION.UPDATE}, next, host);
 	},
 
 	apis.next = function(err, req, res, next) {
@@ -127,49 +138,54 @@ module.exports = function(app, portNumber, opt, proxy) {
 	},
 
 	app.post(peer2peer, function (req, res) {
-		var data = null,
-			token = apis.getToken(req);
-		debug('Host:' + req.headers.host + ', action: ' + req.query.action + ', isvalid: ' + (req.query.sessionKey === sessionKey));
-		if (req.query.action === ACTION.UPDATE) {
-			try {
-				data = sessionStore[req.query.sessionID].data;
-				var node = data, 
-					arr = req.query.path.split('/');
-				for (var i = 1; i < arr.length; i++) {
-					var key = arr[i];
+		var sessionID = apis.encrypt(req.body.uid, encryptKey),
+			sessionData = sessionStore[sessionID],
+			data = null;
 
-					if (i === arr.length - 1) {
-						node[key] = req.query.value;
-					} else {
-						if (node[key] === undefined) {
-							node[key] = {};
-						}
-						node = node[key];
-					}
-				}
-			} catch(e) {
-				/* istanbul ignore next */ 
-				debug(e.stack);
+		if (!sessionData) {
+			var token = apis.getToken(req);
+			if (token) {
+				sessionID = apis.encrypt(token.split('|')[1], encryptKey);
+				sessionData = sessionStore[sessionID];
 			}
-		} else if (token && req.query.sessionKey === sessionKey) {
-			var match = sidRegExp.exec(token);
-			if (match && match.length > 1) {
-				var sessionID = apis.encrypt(match[1], req.query.sessionKey);
+		}
 
-				if (req.query.action === ACTION.COPY || req.query.action === ACTION.TRANSFER) {
-					try {
-						if (sessionStore[sessionID]) {
-							data = apis.serialize(req, res, sessionStore[sessionID].data);
+		debug('Host:' + req.headers.host + ', action: ' + req.query.action, ', sessionID: ' + sessionID);
+		if (sessionData) {
+			if (req.query.action === ACTION.UPDATE) {
+				data = sessionData.data;
+				try {
+					for (var path in req.body) {	
+						var node = sessionData.data, 
+							arr = path.split('/');
+						for (var i = 1; i < arr.length; i++) {
+							var key = arr[i];
+
+							if (i === arr.length - 1) {
+								node[key] = req.body[path];
+							} else {
+								if (node[key] === undefined) {
+									node[key] = {};
+								}
+								node = node[key];
+							}
 						}
-					} catch(e) {
-						/* istanbul ignore next */ 
-						debug(e.stack);
 					}
+				} catch(e) {
+					/* istanbul ignore next */ 
+					debug(e.stack);
 				}
+			} else if (req.query.action === ACTION.COPY || req.query.action === ACTION.TRANSFER) {
+				try {
+					data = apis.serialize(req, res, sessionStore[sessionID].data);
+				} catch(e) {
+					/* istanbul ignore next */ 
+					debug(e.stack);
+				}
+			}
 
-				if (req.query.action === ACTION.DESTROY || req.query.action === ACTION.TRANSFER) {
-					delete sessionStore[sessionID];
-				}
+			if (req.query.action === ACTION.DESTROY || req.query.action === ACTION.TRANSFER) {
+				delete sessionStore[sessionID];
 			}
 		}
 		res.send(data);
@@ -188,54 +204,47 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		debug(req.path);
 
-		var token = apis.getToken(req);
+		var token = apis.getToken(req),
+			sessionID = null;
 
-		if (!req.sessionID) {
-			if (token) {
-				var match = sidRegExp.exec(token);
-				if (match && match.length > 1) {
-					try {
-						req.sessionID = apis.encrypt(match[1], sessionKey);
-						if (isEnvSession && !sessionStore[req.sessionID] && fs.existsSync(lastSessionFile)) {
-							sessionStore[req.sessionID] = apis.deserialize(req, res, fs.readFileSync(lastSessionFile, 'utf8'));
-						}
-					} catch(e) {
-						/* istanbul ignore next */
-						console.error(e.stack);
-					}
+		if (token) {
+			var ip_id = token.split('|');
+			sessionID = apis.encrypt(ip_id[1], encryptKey);
+			try {
+				if (isEnvSession && !sessionStore[sessionID] && fs.existsSync(lastSessionFile)) {
+					sessionStore[sessionID] = apis.deserialize(req, res, fs.readFileSync(lastSessionFile, 'utf8'));
 				}
+			} catch(e) {
+				/* istanbul ignore next */
+				console.error(e.stack);
 			}
 		}
 
-		if (!req.sessionID) {
+		if (!sessionID) {
 			var uid = crypto.randomBytes(32).toString('hex').slice(0, 32);
-			apis.createCookie(res, sessionName, uid);
-			req.sessionID = apis.encrypt(uid, sessionKey);
+			token = ipaddress + '|' + uid;
+			apis.createCookie(res, sessionName, token);
+			sessionID = apis.encrypt(uid, encryptKey);
 		}
 
-		sessionStore[req.sessionID] = sessionStore[req.sessionID] || {
+		sessionStore[sessionID] = sessionStore[sessionID] || {
 			time: null,
 			data: {}
 		};
 
-		sessionStore[req.sessionID].time = Date.now();
+		sessionStore[sessionID].time = Date.now();
 
 		if (isEnvSession) {
-			lastSessionId = req.sessionID;
-			fs.writeFileSync(lastSessionFile, apis.serialize(req, res, sessionStore[req.sessionID]));
+			lastSessionId = sessionID;
+			fs.writeFileSync(lastSessionFile, apis.serialize(req, res, sessionStore[sessionID]));
 		}
 
-		if (token && token.indexOf('x-cloud-ipaddress') === -1) {
-			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
-		}
-
-		if ((match = ipRegExp.exec(token)) && match.length > 1 && match[1] !== ipaddress) {
-			apis.createCookie(res, 'x-cloud-ipaddress', ipaddress);
-			apis.getSession(req, match[1], req.sessionID, function(err) {
+		if (token.split('|')[0] !== ipaddress) {
+			apis.getSession(req, sessionID, function(err) {
 				apis.next(err, req, res, next);
 			});
 		} else {
-			req.session = sessionStore[req.sessionID].data;
+			req.session = sessionStore[sessionID].data;
 			apis.next(null, req, res, next);
 		}
 	});
@@ -248,3 +257,5 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 	return apis;
 };
+
+module.exports.ACTION = ACTION;
