@@ -84,11 +84,15 @@ module.exports = function(app, portNumber, opt, proxy) {
 			if (!token) {
 				var match = sidRegExp.exec(req.headers.cookie);
 				if (match && match.length > 1) {
-					return match[1];
+					token = global.unescape(match[1]);
 				}
 			}
 		}
-		return token;
+		if (token && token.split('|').length === 2) {
+			return token;
+		} else {
+			return null;
+		}
 	};
 
 	apis.createCookie = opt.createCookie || function(res, key, value) {
@@ -194,6 +198,8 @@ module.exports = function(app, portNumber, opt, proxy) {
 	app.use(function session(req, res, next) {
 		if (req.session) {
 			return apis.next(null, req, res, next);
+		} else {
+			req.session = {};
 		}
 
 		for (var i in excludeBase) {

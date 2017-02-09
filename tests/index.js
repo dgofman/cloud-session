@@ -129,9 +129,9 @@ describe('Testing Session', function () {
 		done();
 	});
 
-	it('Should test post request with invalid cookie', function(done) {
+	it('Should test post request with invalid cookie token', function(done) {
 		initialize();
-		req.headers.cookie = ' ';
+		req.headers.cookie = sessionName + '=127.0.0.1';
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
