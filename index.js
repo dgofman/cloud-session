@@ -24,7 +24,7 @@ dns.lookup(require('os').hostname(), function (err, ip) {
 });
 
 module.exports = function(app, portNumber, opt, proxy) {
-	opt = opt || {};
+	opt = opt || {action: ACTION.TRANSFER};
 	proxy = proxy || require('proxy-orchestrator');
 	var apis = {},
 		isHTTPS = !!opt.isHTTPS,
@@ -95,7 +95,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 		}
 	};
 
-	apis.createCookie = opt.createCookie || function(res, key, value) {
+	apis.setToken = opt.setToken || function(res, key, value) {
 		res.cookie(key, value);
 	},
 
@@ -212,13 +212,16 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		var token = apis.getToken(req),
 			sessionID = null;
-
 		if (token) {
 			var ip_id = token.split('|');
 			sessionID = apis.encrypt(ip_id[1], encryptKey);
 			try {
-				if (isEnvSession && !sessionStore[sessionID] && fs.existsSync(lastSessionFile)) {
-					sessionStore[sessionID] = apis.deserialize(req, res, fs.readFileSync(lastSessionFile, 'utf8'));
+				if (!sessionStore[sessionID]) {
+					if (isEnvSession && fs.existsSync(lastSessionFile)) {
+						sessionStore[sessionID] = apis.deserialize(req, res, fs.readFileSync(lastSessionFile, 'utf8'));
+					} else {
+						sessionID = null;
+					}
 				}
 			} catch(e) {
 				/* istanbul ignore next */
@@ -229,9 +232,10 @@ module.exports = function(app, portNumber, opt, proxy) {
 		if (!sessionID) {
 			var uid = crypto.randomBytes(32).toString('hex').slice(0, 32);
 			token = ipaddress + '|' + uid;
-			apis.createCookie(res, sessionName, token);
 			sessionID = apis.encrypt(uid, encryptKey);
 		}
+		apis.setToken(res, sessionName, token);
+		req.sessionID = sessionID;
 
 		sessionStore[sessionID] = sessionStore[sessionID] || {
 			time: null,

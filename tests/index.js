@@ -7,13 +7,14 @@ describe('Testing Session', function () {
 
 	var portNumber = 12345,
 		sessionName = 'my.sid',
+		encryptKey = 'mySecretKey',
 		opt, app, req, res;
 
 	var initialize = function() {
 		opt = {
 			'isHTTPS': false,
 			'session-env': true, 
-			'encrypt-key': 'mySecretKey',
+			'encrypt-key': encryptKey,
 			'session-name': sessionName,
 			'peer2peer': '/cloud/session',
 			'session-file': './session',
@@ -30,14 +31,15 @@ describe('Testing Session', function () {
 		res = {
 			send: function() {
 			},
-			cookie: function() {
+			cookie: function(key, value) {
+				req.headers.saved_cookies[key] = value;
 			}
 		};
 		req = {
 			body: {uid: '12345'},
-			headers: {host: '127.0.0.1'},
+			headers: {host: '127.0.0.1', saved_cookies: {}},
 			sessionID: '54321',
-			query: { action: 'TEST', sessionKey: opt['encrypt-key'] }
+			query: { action: 'TEST', sessionKey: encryptKey }
 		};
 	};
 
@@ -92,7 +94,7 @@ describe('Testing Session', function () {
 	it('Should test encrypt token', function(done) {
 		initialize();
 		var apis = session(app, portNumber, opt),
-			data = apis.encrypt ('df3c50b1c2eda61617457e5646e36f25', opt['encrypt-key']);
+			data = apis.encrypt ('df3c50b1c2eda61617457e5646e36f25', encryptKey);
 		assert.equal(data, 'SzWSzd5DZiA9yrkMBhqgyPZU4CRaqC03xQp6mu1hXrg=');
 		done();
 	});
@@ -143,7 +145,7 @@ describe('Testing Session', function () {
 
 	it('Should test post request with session id', function(done) {
 		initialize();
-		req.headers.cookie = opt['session-name'] + '=127.0.0.1|xxxxx';
+		req.headers.cookie = sessionName + '=127.0.0.1|xxxxx';
 		app.post = function(path, callback) {
 			assert.equal(path, opt.peer2peer);
 			callback(req, res);
@@ -169,6 +171,28 @@ describe('Testing Session', function () {
 			});
 		};
 		session(app, portNumber, opt);
+	});
+
+	it('Should test app middleware with the same sessionID', function(done) {
+		var _req = JSON.parse(JSON.stringify(req)),
+			apis = null;
+		app.use = function(callback) {
+			setTimeout(function() {
+				var token = _req.headers.saved_cookies[sessionName];
+				_req.headers.cookie = sessionName + '=' + token;
+				callback(_req, res, function() {
+					assert.equal(_req.sessionID, apis.encrypt(token.split('|')[1], encryptKey));
+					app.use = function(callback) {
+						callback(_req, res, function() {
+							done();
+						});
+					}
+				});
+				_req.session = null;
+				session(app, portNumber, opt);
+			}, 1);
+		};
+		apis = session(app, portNumber, opt);
 	});
 
 	it('Should test app middleware without cookie', function(done) {
@@ -218,7 +242,7 @@ describe('Testing Session', function () {
 			callback(_req, res, function() {});
 		};
 		var apis = session(app, portNumber, opt, proxy);
-		apis.getSession(_req, apis.encrypt('NEW_SESSION_ID', opt['encrypt-key']), function() {
+		apis.getSession(_req, apis.encrypt('NEW_SESSION_ID', encryptKey), function() {
 			done();
 		});
 	});
