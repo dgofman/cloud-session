@@ -74,7 +74,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 	apis.encrypt = opt.encrypt || function(val, secret) {
 		opt.intercept('ENCRYPT', val, secret);
-		return crypto.createHmac('sha256', secret).update(val).digest('base64');
+		return crypto.createHmac('sha256', secret).update(val || '').digest('base64');
 	};
 
 	apis.getToken = opt.getToken || function(req) {

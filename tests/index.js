@@ -96,6 +96,7 @@ describe('Testing Session', function () {
 		var apis = session(app, portNumber, opt),
 			data = apis.encrypt ('df3c50b1c2eda61617457e5646e36f25', encryptKey);
 		assert.equal(data, 'SzWSzd5DZiA9yrkMBhqgyPZU4CRaqC03xQp6mu1hXrg=');
+		apis.encrypt ('', encryptKey);
 		done();
 	});
 
@@ -186,7 +187,7 @@ describe('Testing Session', function () {
 						callback(_req, res, function() {
 							done();
 						});
-					}
+					};
 				});
 				_req.session = null;
 				session(app, portNumber, opt);
