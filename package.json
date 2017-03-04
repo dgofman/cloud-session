@@ -1,10 +1,10 @@
 {
   "name": "cloud-session",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Session replication library",
   "main": "index.js",
   "scripts": {
-    "lint": "jshint . --config .jshintrc",
+    "jshint": "jshint . --config .jshintrc",
     "test": "mocha tests/index.js --reporter spec --check-leaks",
     "cover": "istanbul cover ./node_modules/mocha/bin/_mocha tests/index.js -- --reporter spec",
     "check": "istanbul check-coverage --statement 100 --branch 100 --function 100 --lines 100",

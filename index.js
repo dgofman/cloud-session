@@ -4,6 +4,7 @@ var crypto = require('crypto'),
 	fs = require('fs'),
 	debug = require('debug')('cloud-session:index'),
 	dns = require('dns'),
+	net = require('net'),
 	sessionStore = {},
 	ipaddress;
 
@@ -33,6 +34,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 		sessionName =  opt['session-name'] || 'x-cloud-session',
 		expTime = opt['exp-time'] || 3600, //session expiration time in seconds
 		expInterval = opt['exp-interval'] || 60 * 10, //check exired sessions every 10 minutes
+		pingTimeout = opt['ping-timeout'] || 1000,
 		peer2peer = opt['peer2peer'] || '/cloud-session',
 		lastSessionFile = opt['session-file'] || './session',
 		excludeBase = (typeof opt['exclude-base'] === 'string' ? [opt['exclude-base']] : opt['exclude-base'] || []),
@@ -42,13 +44,13 @@ module.exports = function(app, portNumber, opt, proxy) {
 	var request = function(req, data, query, next, host) {
 		var token = apis.getToken(req);
 		if (token) {
-			var ip_id = token.split('|');
+			var ip_uid = token.split('|');
 			if (!data.uid) {
-				data.uid = ip_id[1];
+				data.uid = ip_uid[1];
 			}
-			debug('Request:host=' + ip_id[0] + ', uid=' + data.uid);
+			debug('Request:host=' + ip_uid[0] + ', uid=' + data.uid);
 			proxy({
-				host: host || ip_id[0],
+				host: host || ip_uid[0],
 				port: portNumber,
 				secure: isHTTPS
 			}, req).request(function(err, result) {
@@ -213,8 +215,8 @@ module.exports = function(app, portNumber, opt, proxy) {
 		var token = apis.getToken(req),
 			sessionID = null;
 		if (token) {
-			var ip_id = token.split('|');
-			sessionID = apis.encrypt(ip_id[1], encryptKey);
+			var ip_uid = token.split('|');
+			sessionID = apis.encrypt(ip_uid[1], encryptKey);
 			try {
 				if (!sessionStore[sessionID]) {
 					if (isEnvSession && fs.existsSync(lastSessionFile)) {
@@ -249,9 +251,22 @@ module.exports = function(app, portNumber, opt, proxy) {
 			fs.writeFileSync(lastSessionFile, apis.serialize(req, res, sessionStore[sessionID]));
 		}
 
-		if (token.split('|')[0] !== ipaddress) {
-			apis.getSession(req, sessionID, function(err) {
-				apis.next(err, req, res, next);
+		ip_uid = token.split('|');
+		if (ip_uid[0] !== ipaddress) {
+			debug('PING: ' + ip_uid[0]);
+			net.createConnection({port: portNumber, host: ip_uid[0]}, 
+			/* istanbul ignore next */
+			function () {
+				this.destroy();
+				apis.getSession(req, sessionID, function(err) {
+					apis.next(err, req, res, next);
+				});
+			}).setTimeout(pingTimeout, function () {
+				debug('PING TIMEOUT: ' + ip_uid[0]);
+				this.destroy();
+				req.session = sessionStore[sessionID].data;
+				apis.setToken(res, sessionName, ipaddress + '|' + ip_uid[1]);
+				apis.next(null, req, res, next);
 			});
 		} else {
 			req.session = sessionStore[sessionID].data;
