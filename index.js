@@ -253,6 +253,7 @@ module.exports = function(app, portNumber, opt, proxy) {
 
 		ip_uid = token.split('|');
 		if (ip_uid[0] !== ipaddress) {
+			console.log('HERE', portNumber, ip_uid[0])
 			debug('PING: ' + ip_uid[0]);
 			net.createConnection({port: portNumber, host: ip_uid[0]}, 
 			/* istanbul ignore next */

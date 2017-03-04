@@ -326,7 +326,7 @@ describe('Testing Session', function () {
 		app.use = function(callback) {
 			callback(_req, res, done);
 		};
-		session(app, portNumber, opt, proxy);
+		session(app, 8080, opt, proxy);
 	});
 
 	it('Should test app middleware cleanAll function', function(done) {
