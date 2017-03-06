@@ -327,12 +327,12 @@ describe('Testing Session', function () {
 						setTimeout: function(pingTimeout, callback) {
 							assert.equal(pingTimeout, opt['ping-timeout']);
 							callback();
-							done();
 						}
 					};
 				};
 				next(_req, res, function() {});
-			}, 100);
+				done();
+			}, 1);
 		};
 		apis = session(app, portNumber, opt, proxy);
 	});
