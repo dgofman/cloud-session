@@ -293,41 +293,50 @@ describe('Testing Session', function () {
 		done();
 	});
 
-	it('Should test app middleware create session file', function(done) {
+	it('Should test netConnection call', function(done) {
 		initialize();
 		process.env.NODE_ENV = 'development';
-		var _req = JSON.parse(JSON.stringify(req)),
-			proxy = function() {
-				return {
-					request: function(callback) {
-						callback(null, {time: Date.now(), data: {}});
-					}
-				};
-			};
-		_req.headers.cookie = sessionName + '=127.0.0.1|' + Date.now();
-		app.use = function(callback) {
-			callback(_req, res, done);
-		};
-		session(app, portNumber, opt, proxy);
+		var apis = session(app, portNumber, opt);
+		apis.netConnection('127.0.0.1', portNumber).on('error', function(err) {
+			assert.equal(err.code, 'ECONNREFUSED');
+			done();
+		});
 	});
 
-	it('Should test app middleware get session data from file', function(done) {
+	it('Should test custom netConnection', function(done) {
 		initialize();
 		process.env.NODE_ENV = 'development';
-		var _req = JSON.parse(JSON.stringify(req)),
+		opt['ping-timeout'] = 3000;
+		var apis, lastHost = '127.1.2.3',
+			_req = JSON.parse(JSON.stringify(req)),
 			proxy = function() {
 				return {
 					request: function(callback) {
 						callback(null, {time: Date.now(), data: {}});
+						done();
 					}
 				};
 			};
-		_req.headers.cookie = sessionName + '=127.0.0.1|' + Date.now();
-		app.use = function(callback) {
-			callback(_req, res, done);
+		_req.headers.cookie = sessionName + '=' + lastHost + '|' + Date.now();
+		app.use = function(next) {
+			setTimeout(function() {
+				apis.netConnection = function(host, port, callback) {
+					assert.equal(host, lastHost);
+					assert.equal(port, portNumber);
+					callback();
+					return {
+						setTimeout: function(pingTimeout, callback) {
+							assert.equal(pingTimeout, opt['ping-timeout']);
+							callback();
+						}
+					};
+				};
+				next(_req, res, function() {});
+			}, 1);
 		};
-		session(app, 8080, opt, proxy);
+		apis = session(app, portNumber, opt, proxy);
 	});
+
 
 	it('Should test app middleware cleanAll function', function(done) {
 		var _req = JSON.parse(JSON.stringify(req));

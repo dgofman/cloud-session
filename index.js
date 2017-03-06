@@ -138,6 +138,10 @@ module.exports = function(app, portNumber, opt, proxy) {
 		request(req, data, {action: ACTION.UPDATE}, next, host);
 	},
 
+	apis.netConnection = function(host, port, callback) {
+		return net.createConnection({port: port, host: host}, callback);
+	},
+
 	apis.next = function(err, req, res, next) {
 		opt.intercept('NEXT', err);
 		next(err);
@@ -254,16 +258,13 @@ module.exports = function(app, portNumber, opt, proxy) {
 		ip_uid = token.split('|');
 		if (ip_uid[0] !== ipaddress) {
 			debug('PING: ' + ip_uid[0]);
-			net.createConnection({port: portNumber, host: ip_uid[0]}, 
-			/* istanbul ignore next */
+			apis.netConnection(ip_uid[0], portNumber,
 			function () {
-				this.destroy();
 				apis.getSession(req, sessionID, function(err) {
 					apis.next(err, req, res, next);
 				});
 			}).setTimeout(pingTimeout, function () {
 				debug('PING TIMEOUT: ' + ip_uid[0]);
-				this.destroy();
 				req.session = sessionStore[sessionID].data;
 				apis.setToken(res, sessionName, ipaddress + '|' + ip_uid[1]);
 				apis.next(null, req, res, next);
