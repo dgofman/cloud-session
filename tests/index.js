@@ -332,7 +332,7 @@ describe('Testing Session', function () {
 					};
 				};
 				next(_req, res, function() {});
-			}, 1);
+			}, 100);
 		};
 		apis = session(app, portNumber, opt, proxy);
 	});
