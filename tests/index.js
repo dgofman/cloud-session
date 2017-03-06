@@ -313,7 +313,6 @@ describe('Testing Session', function () {
 				return {
 					request: function(callback) {
 						callback(null, {time: Date.now(), data: {}});
-						done();
 					}
 				};
 			};
@@ -328,6 +327,7 @@ describe('Testing Session', function () {
 						setTimeout: function(pingTimeout, callback) {
 							assert.equal(pingTimeout, opt['ping-timeout']);
 							callback();
+							done();
 						}
 					};
 				};
